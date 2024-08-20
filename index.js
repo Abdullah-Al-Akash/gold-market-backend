@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb');
+const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
 require("dotenv").config();
 
 const app = express();
@@ -32,6 +32,7 @@ async function run() {
     const db = client.db("GoldMarket");
     const usersCollection = db.collection("users");
     const buySellRateCollection = db.collection("buySellRate");
+    const businessCollection = db.collection("businessCollection");
 
     // Add New User:
     app.post("/addUser", async (req, res) => {
@@ -63,44 +64,176 @@ async function run() {
         res.status(500).json({ message: "Internal Server Error" });
       }
     });
+    // Get All User:
+    app.get("/users", async (req, res) => {
+      const cursor = usersCollection.find({});
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    // Get Current User Details:
+    app.get("/user", async (req, res) => {
+      const email = req.query.email;
+      try {
+        // Find a single document matching the email
+        const user = await usersCollection.findOne({ email: email });
 
+        // Check if a user was found and send the response
+        if (user) {
+          res.json(user);
+        } else {
+          res.status(404).json({ message: "User not found" });
+        }
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
     // Post for buy:
     app.post("/buy", async (req, res) => {
       const body = req.body;
-      console.log(body);
+      // Validate request data
+      // if (!body.item || !body.quantity || !body.price) {
+      //     return res.status(400).json({ message: 'Missing required fields: item, quantity, or price' });
+      // }
+
+      try {
+        // Assuming you want to insert the data into a MongoDB collection
+        const result = await businessCollection.insertOne(body);
+
+        // Send a success response with the inserted document ID
+        res
+          .status(201)
+          .json({ message: "Buy operation successful", id: result.insertedId });
+      } catch (error) {
+        console.error("Error processing buy request:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
     });
 
     // Load Buy and Sell Rate:
     app.get("/buy-sell-rate", async (req, res) => {
-      const cursor = buySellRateCollection.find({});
-      const result = await cursor.toArray();
-      res.send(result);
+      try {
+        // Fetch the first document from the collection
+        const rate = await buySellRateCollection.findOne();
+
+        // Check if a document was found and send the response
+        if (rate) {
+          res.json(rate);
+        } else {
+          res.status(404).json({ message: "No rate found" });
+        }
+      } catch (error) {
+        console.error("Error fetching buy-sell rate:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
     });
     // Update Gold Rate:
-app.put('/buy-sell-rate/:id', async (req, res) => {
-  const { id } = req.params;
-  const { userBuyRate, userSellRate, deliveryCharge } = req.body;
+    app.put("/buy-sell-rate/:id", async (req, res) => {
+      const { id } = req.params;
+      const { userBuyRate, userSellRate, deliveryCharge } = req.body;
 
-  try {
-    const updatedRate = await buySellRateCollection.updateOne(
-      { _id: new ObjectId(id) }, // Convert string ID to MongoDB ObjectId
-      { $set: { userBuyRate, userSellRate, deliveryCharge } }, // Use $set to specify the fields to update
-      { upsert: false } // Do not insert if the document does not exist
-    );
+      try {
+        const updatedRate = await buySellRateCollection.updateOne(
+          { _id: new ObjectId(id) }, // Convert string ID to MongoDB ObjectId
+          { $set: { userBuyRate, userSellRate, deliveryCharge } }, // Use $set to specify the fields to update
+          { upsert: false } // Do not insert if the document does not exist
+        );
 
-    if (updatedRate.matchedCount === 0) {
-      return res.status(404).json({ message: 'Resource not found' });
-    }
+        if (updatedRate.matchedCount === 0) {
+          return res.status(404).json({ message: "Resource not found" });
+        }
 
-    // Fetch and return the updated document
-    const updatedDocument = await buySellRateCollection.findOne({ _id: new ObjectId(id) });
-    res.status(200).json(updatedDocument);
-  } catch (error) {
-    console.error('Error updating resource:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+        // Fetch and return the updated document
+        const updatedDocument = await buySellRateCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        res.status(200).json(updatedDocument);
+      } catch (error) {
+        console.error("Error updating resource:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
 
+    // Transaction History Individual:
+    app.get("/transaction", async (req, res) => {
+      const email = req.query.email;
+
+      // Validate email input
+      if (!email) {
+        return res
+          .status(400)
+          .json({ message: "Email query parameter is required" });
+      }
+
+      try {
+        // Find documents matching the email
+        const history = await businessCollection
+          .find({ "CUser.email": email })
+          .toArray();
+
+        // Check if history was found and send the response
+        if (history.length > 0) {
+          res.json(history);
+        } else {
+          res
+            .status(404)
+            .json({ message: "No transactions found for this email" });
+        }
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    // All Request/Transaction History
+    app.get("/request", async (req, res) => {
+      try {
+        // Find documents matching the email
+        const request = await businessCollection.find({}).toArray();
+
+        // Check if history was found and send the response
+        if (request.length > 0) {
+          res.json(request);
+        } else {
+          res
+            .status(404)
+            .json({ message: "No transactions found for this email" });
+        }
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    // Approved Request:
+    app.put('/request/:id', async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+  
+      // Check if status is provided
+      if (status === undefined) {
+          return res.status(400).json({ message: 'Status is required' });
+      }
+  
+      try {
+  
+          // Update the status field of the specified item
+          const result = await businessCollection.updateOne(
+              { _id: new ObjectId(id) },
+              { $set: { status: status } }
+          );
+  
+          // Check if the item was found and updated
+          if (result.matchedCount === 0) {
+              return res.status(404).json({ message: 'Item not found' });
+          }
+  
+          res.json({ message: 'Status updated successfully' });
+      } catch (error) {
+          console.error('Error updating status:', error);
+          res.status(500).json({ message: 'Internal Server Error' });
+      }
+  });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
