@@ -36,7 +36,7 @@ async function run() {
 
     // Add New User:
     app.post("/addUser", async (req, res) => {
-      const { name, email, phoneNumber, referenceId } = req.body;
+      const { name, email, phoneNumber, referenceId, myVault } = req.body;
       console.log(name, email, phoneNumber, referenceId);
       try {
         // Check if the email already exists
@@ -51,6 +51,7 @@ async function run() {
           email,
           phoneNumber,
           referenceId,
+          myVault,
         };
 
         // Insert the new user into the database
@@ -91,10 +92,6 @@ async function run() {
     // Post for buy:
     app.post("/buy", async (req, res) => {
       const body = req.body;
-      // Validate request data
-      // if (!body.item || !body.quantity || !body.price) {
-      //     return res.status(400).json({ message: 'Missing required fields: item, quantity, or price' });
-      // }
 
       try {
         // Assuming you want to insert the data into a MongoDB collection
@@ -206,34 +203,63 @@ async function run() {
     });
 
     // Approved Request:
-    app.put('/request/:id', async (req, res) => {
+    app.put("/request/:id", async (req, res) => {
       const { id } = req.params;
-      const { status } = req.body;
-  
+      const { status, requestType, amountInGm, amountInBdt, userId } = req.body;
+      console.log(status, requestType, amountInGm, amountInBdt, userId);
+
       // Check if status is provided
       if (status === undefined) {
-          return res.status(400).json({ message: 'Status is required' });
+        return res.status(400).json({ message: "Status is required" });
       }
-  
+
       try {
-  
-          // Update the status field of the specified item
-          const result = await businessCollection.updateOne(
-              { _id: new ObjectId(id) },
-              { $set: { status: status } }
+        // Update the status field of the specified item
+        const result = await businessCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: status } }
+        );
+        // Update Amount of Gold in User Profile:
+        if (requestType == "Buy") {
+          const updateUserVault = await usersCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            { $inc: { myVault: amountInGm } } // Increment myVault by amountInGm
           );
-  
-          // Check if the item was found and updated
-          if (result.matchedCount === 0) {
-              return res.status(404).json({ message: 'Item not found' });
+          if (updateUserVault.matchedCount === 0) {
+            return res.status(404).json({ message: "Item not found" });
           }
-  
-          res.json({ message: 'Status updated successfully' });
+        }
+        if (requestType == "Sell") {
+          const user = await usersCollection.findOne({
+            _id: new ObjectId(userId),
+          });
+          const currentVault = user?.myVault;
+
+          // Step 2: Calculate the new value
+          const newVaultValue = currentVault - amountInGm;
+
+          // Step 3: Update the 'myVault' field with the new value
+          const updateResult = await usersCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { myVault: newVaultValue } }
+          );
+
+          if (updateResult.matchedCount === 0) {
+            return res.status(404).json({ message: "Item not found" });
+          }
+        }
+
+        // Check if the item was found and updated
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "Item not found" });
+        }
+
+        res.json({ message: "Status updated successfully" });
       } catch (error) {
-          console.error('Error updating status:', error);
-          res.status(500).json({ message: 'Internal Server Error' });
+        console.error("Error updating status:", error);
+        res.status(500).json({ message: "Internal Server Error" });
       }
-  });
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
