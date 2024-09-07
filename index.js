@@ -33,10 +33,11 @@ async function run() {
     const usersCollection = db.collection("users");
     const buySellRateCollection = db.collection("buySellRate");
     const businessCollection = db.collection("businessCollection");
+    const adminReport = db.collection("adminReport");
 
     // Add New User:
     app.post("/addUser", async (req, res) => {
-      const { name, email, phoneNumber, referenceId, myVault } = req.body;
+      const { name, email, phoneNumber, referenceId, myVault, nid } = req.body;
       console.log(name, email, phoneNumber, referenceId);
       try {
         // Check if the email already exists
@@ -51,7 +52,8 @@ async function run() {
           email,
           phoneNumber,
           referenceId,
-          myVault,
+          nid,
+          myVault
         };
 
         // Insert the new user into the database
@@ -258,6 +260,23 @@ async function run() {
       } catch (error) {
         console.error("Error updating status:", error);
         res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    app.get('/adminReport', async (req, res) => {
+      try {
+        // Fetch all documents from the 'users' collection
+        const users = await usersCollection.find({}).toArray();
+        
+        // Calculate the sum of 'myVault' field
+        const totalVault = users.reduce((sum, user) => sum + (user.myVault || 0), 0);
+        
+        // Send the sum as a JSON response
+        res.json({ totalVault });
+      } catch (error) {
+        // Handle errors and send an appropriate response
+        console.error('Error fetching users or calculating sum:', error);
+        res.status(500).json({ error: 'An error occurred while processing the request.' });
       }
     });
 
