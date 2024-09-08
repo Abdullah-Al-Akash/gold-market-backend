@@ -38,7 +38,7 @@ async function run() {
     // Add New User:
     app.post("/addUser", async (req, res) => {
       const { name, email, phoneNumber, referenceId, myVault, nid } = req.body;
-      console.log(name, email, phoneNumber, referenceId);
+      
       try {
         // Check if the email already exists
         const existingUser = await usersCollection.findOne({ email });
@@ -70,7 +70,7 @@ async function run() {
     // Get All User:
     app.get("/users", async (req, res) => {
       const cursor = usersCollection.find({});
-      const result = await cursor.toArray();
+      const result = await cursor.sort({ _id: -1 }).toArray();
       res.send(result);
     });
     // Get Current User Details:
@@ -188,7 +188,7 @@ async function run() {
     app.get("/request", async (req, res) => {
       try {
         // Find documents matching the email
-        const request = await businessCollection.find({}).toArray();
+        const request = await businessCollection.find({}).sort({ _id: -1 }).toArray();
 
         // Check if history was found and send the response
         if (request.length > 0) {
